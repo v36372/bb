@@ -29,6 +29,7 @@ const skillFrontmatterSchema = z
       .refine((value) => value.trim().length > 0, {
         message: "Skill description must be non-empty",
       }),
+    projectOnly: z.boolean().default(false),
   })
   .passthrough();
 
@@ -93,6 +94,7 @@ interface ResolveServerOwnedSkillCatalogEntriesArgs {
   dataDir: string;
   logger: ServerLogger;
   skillTreeRegistry: SkillTreeRegistry;
+  includeProjectOnlyBuiltinSkills?: boolean;
 }
 
 export type ProjectInjectedSkillSource = Extract<
@@ -132,6 +134,7 @@ interface SkillCandidateSource {
     HostDaemonInjectedSkillSource["sourceType"],
     "builtin" | "data-dir" | "project"
   >;
+  includeProjectOnlyBuiltinSkills?: boolean;
 }
 
 interface SkillRootScanArgs extends SkillCandidateSource {
@@ -351,6 +354,13 @@ function readSkillCandidate(
     });
     return null;
   }
+  if (
+    args.sourceType === "builtin" &&
+    frontmatter.data.projectOnly &&
+    args.includeProjectOnlyBuiltinSkills !== true
+  ) {
+    return null;
+  }
 
   if (args.sourceType === "project") {
     return {
@@ -513,6 +523,8 @@ function readSkillsRoot(
       logger: args.logger,
       skillTreeRegistry: args.skillTreeRegistry,
       sourceType: args.sourceType,
+      includeProjectOnlyBuiltinSkills:
+        args.includeProjectOnlyBuiltinSkills,
     });
     if (source) {
       sources.push(source);
@@ -530,6 +542,8 @@ export function resolveServerOwnedSkillCatalogEntries(
     skillTreeRegistry: args.skillTreeRegistry,
     skillsRootPath: args.builtinSkillsRootPath,
     sourceType: "builtin",
+    includeProjectOnlyBuiltinSkills:
+      args.includeProjectOnlyBuiltinSkills,
   }).map((runtimeSource) => ({
     provenance: { kind: "builtin" } as const,
     runtimeSource,

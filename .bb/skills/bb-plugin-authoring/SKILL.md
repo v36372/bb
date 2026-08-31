@@ -1,7 +1,6 @@
 ---
 name: bb-plugin-authoring
 description: Write, build, test, and install BB plugins. Use whenever a task creates or changes a BB plugin, BB CLI command, agent tool, background service, provider, setting, panel, mention provider, file renderer, message action, or other Plugin SDK surface.
-projectOnly: true
 ---
 
 # Author BB plugins

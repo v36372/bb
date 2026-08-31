@@ -53,6 +53,7 @@ function resolveGlobalCliSkills(
     dataDir: deps.config.dataDir,
     logger: deps.logger,
     skillTreeRegistry: deps.skillTreeRegistry,
+    includeProjectOnlyBuiltinSkills: true,
   }).flatMap(({ provenance, runtimeSource }) =>
     provenance.kind === "builtin" &&
     runtimeSource.kind === "tree" &&

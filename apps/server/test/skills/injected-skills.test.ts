@@ -37,6 +37,7 @@ interface CapturingLogger {
 interface WriteSkillArgs {
   description?: string;
   name: string;
+  projectOnly?: boolean;
   rootPath: string;
 }
 
@@ -106,6 +107,7 @@ async function writeSkill(args: WriteSkillArgs): Promise<string> {
       "---",
       `name: ${args.name}`,
       `description: ${args.description ?? `Use ${args.name} when tests need it.`}`,
+      ...(args.projectOnly ? ["projectOnly: true"] : []),
       "---",
       "",
       `# ${args.name}`,
@@ -574,13 +576,43 @@ describe("injected skill source discovery", () => {
     });
 
     const builtinNames = sources.map((source) => source.name);
-    expect(builtinNames).toContain("bb-cli");
+    expect(builtinNames).not.toContain("bb-cli");
+    expect(builtinNames).not.toContain("bb-plugin-authoring");
+    expect(builtinNames).toContain("skill-creator");
     expect(builtinNames).toContain("submit-a-plugin");
     for (const source of sources) {
       expect(source.sourceType).toBe("builtin");
       expect(source.description.trim().length).toBeGreaterThan(0);
     }
     expect(warnings).toEqual([]);
+  });
+
+  it("keeps project-only built-ins out of global injection", async () => {
+    const root = await makeTempDir();
+    const dataDir = path.join(root, "data");
+    const builtinSkillsRootPath = path.join(root, "builtins");
+    await writeSkill({
+      rootPath: builtinSkillsRootPath,
+      name: "project-helper",
+      projectOnly: true,
+    });
+    const { logger } = createCapturingLogger();
+
+    expect(
+      resolveInjectedSkillSources(logger, {
+        builtinSkillsRootPath,
+        dataDir,
+      }),
+    ).toEqual([]);
+    expect(
+      resolveServerOwnedSkillCatalogEntries({
+        builtinSkillsRootPath,
+        dataDir,
+        includeProjectOnlyBuiltinSkills: true,
+        logger,
+        skillTreeRegistry: new SkillTreeRegistry(),
+      }).map((entry) => entry.runtimeSource.name),
+    ).toEqual(["project-helper"]);
   });
 
   it("lists server-owned user and built-in copies independently", async () => {
