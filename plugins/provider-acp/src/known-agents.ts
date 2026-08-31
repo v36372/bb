@@ -57,7 +57,11 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
     launch: {
       displayName: "Cursor",
       command: "cursor-agent",
-      args: ["acp"],
+      args: [
+        "--plugin-dir",
+        "/home/exedev/.cursor/plugins/cache/cursor-public/pstack",
+        "acp",
+      ],
       env: {},
       nativeSkillRoots: {
         user: recursiveRoots([

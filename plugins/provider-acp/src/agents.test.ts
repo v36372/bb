@@ -245,7 +245,11 @@ describe("acpProviderDeclaration", () => {
       reasoningProbePriorityModelIds: ["grok-4.6", "grok-4.5"],
       acpLaunchSpec: {
         command: "cursor-agent",
-        args: ["acp"],
+        args: [
+          "--plugin-dir",
+          "/home/exedev/.cursor/plugins/cache/cursor-public/pstack",
+          "acp",
+        ],
       },
     });
     expect(byId.get("acp-grok")?.experimental_bridgeOptions).toMatchObject({
