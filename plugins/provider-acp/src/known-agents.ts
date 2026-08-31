@@ -62,7 +62,7 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
       nativeSkillRoots: {
         user: recursiveRoots([
           ".cursor/skills",
-          ".cursor/plugins/cache",
+          ".cursor/plugins/cache/cursor-public/pstack",
           ".agents/skills",
           CLAUDE_SKILLS_ROOT,
           ".codex/skills",
