@@ -19,6 +19,9 @@ const CURSOR_ENABLED_SETTING_DESCRIPTION =
   "Show Cursor in the provider picker even when cursor-agent is not installed.";
 const OPENCODE_ENABLED_SETTING_DESCRIPTION =
   "Show opencode when its CLI is detected on the host.";
+const CURSOR_PSTACK_SKILLS_ROOT =
+  "/home/exedev/.cursor/plugins/cache/cursor-public/pstack";
+const CURSOR_PSTACK_INSTRUCTIONS = `Cursor pstack skills are available below ${CURSOR_PSTACK_SKILLS_ROOT}. When the user invokes /<skill-name>, resolve the newest matching */skills/<skill-name>/SKILL.md below that root, read it in full, and follow it before doing the task. /poteto-mode is a pstack skill, not plain prompt text.`;
 
 const PROBEABLE_ACP_AGENTS = KNOWN_ACP_AGENTS.filter(
   (agent) => (agent.fork ?? "none") !== "none",
@@ -46,6 +49,14 @@ export default async function acpProvidersPlugin(
   bb: BbPluginApi,
 ): Promise<void> {
   const host = bb.hosts.experimental_client({ contract: acpHostContract });
+  bb.agents.configure((context) => ({
+    tools: [],
+    skills: [],
+    ...(context.provider.id === "acp-cursor"
+      ? { instructions: CURSOR_PSTACK_INSTRUCTIONS }
+      : {}),
+  }));
+
   let cursorEnabled = true;
   let opencodeEnabled = true;
   const settings = bb.settings.define({

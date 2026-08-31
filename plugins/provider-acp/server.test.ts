@@ -1,6 +1,7 @@
 import { getEventListeners } from "node:events";
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
+import type { PluginAgentConfigurationContext } from "@get-bb/plugin-sdk";
 import { experimental_acpAgentProbeSchema } from "@get-bb/plugin-sdk/provider-bridge/acp";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
@@ -86,6 +87,58 @@ async function loadPlugin(options: {
   await acpProvidersPlugin(host.bb);
   return host;
 }
+
+function configurationContext(
+  providerId: string,
+): PluginAgentConfigurationContext {
+  return {
+    thread: {
+      id: "thr-test",
+      title: null,
+      parentThreadId: null,
+      sourceThreadId: null,
+    },
+    project: {
+      id: "proj-test",
+      kind: "standard",
+      name: "test",
+      gitRemoteUrl: null,
+    },
+    environment: {
+      id: "env-test",
+      name: null,
+      path: "/workspace",
+      workspaceProvisionType: "unmanaged",
+      branchName: null,
+    },
+    host: { id: "host-test", name: "local" },
+    provider: {
+      id: providerId,
+      model: "test-model",
+      capabilities: { supportsNativeUserQuestion: false },
+    },
+    origin: { kind: null, pluginId: null },
+  };
+}
+
+describe("the ACP plugin's agent configuration", () => {
+  it("teaches Cursor sessions how to invoke pstack skills", async () => {
+    const host = await loadPlugin({});
+
+    const cursor = await host.harness.resolveAgentConfiguration(
+      configurationContext("acp-cursor"),
+    );
+    const omp = await host.harness.resolveAgentConfiguration(
+      configurationContext("acp-omp"),
+    );
+
+    expect(cursor.instructions).toContain("/poteto-mode");
+    expect(cursor.instructions).toContain(
+      "/home/exedev/.cursor/plugins/cache/cursor-public/pstack",
+    );
+    expect(omp.instructions).toBeNull();
+  });
+});
 
 describe("the ACP plugin's registrations", () => {
   it("registers every shipped agent, and a configured one beside them", async () => {
