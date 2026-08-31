@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+install -o root -g root -m 0755 "$root/bb-deploy" /usr/local/bin/bb-deploy
+install -o root -g root -m 0755 "$root/bb-deploy-worker" /usr/local/sbin/bb-deploy-worker

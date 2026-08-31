@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+repo=/home/exedev/bb
+state=/var/lib/bb-deploy
+releases=/home/exedev/.local/state/bb/releases
+backups=/home/exedev/.local/state/bb/backups
+mode=${1:-deploy}
+resume_thread_id=${2:-}
+deploy_unit=${3:-}
+
+mkdir -p "$state" "$releases" "$backups"
+chown -R exedev:exedev /home/exedev/.local/state/bb
+exec 9>/run/lock/bb-deploy.lock
+flock -n 9 || { echo "another bb deployment is running"; exit 1; }
+
+health_check() {
+  for _ in $(seq 1 90); do
+    if curl --fail --silent --output /dev/null http://127.0.0.1:8000/; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+start_and_check() {
+  systemctl start bb
+  health_check
+}
+
+queue_resume() {
+  local detail=$1
+  if [[ -z "$resume_thread_id" ]]; then
+    return
+  fi
+  local message="BB deployment unit $deploy_unit is restarting this BB for $detail. Continue the interrupted deployment workflow automatically: inspect bb-deploy logs, verify bb status and live health, confirm the deployed release, finish every remaining task, and report the result. Do not start another deployment unless this unit failed before installing."
+  if ! sudo -u exedev env \
+    HOME=/home/exedev \
+    BB_SERVER_URL=http://127.0.0.1:8000 \
+    /usr/local/bin/bb thread tell "$resume_thread_id" "$message" --mode queue --json; then
+    echo "warning: could not queue automatic continuation for thread $resume_thread_id" >&2
+  fi
+}
+
+rollback_package() {
+  local package
+  package=$(cat "$state/rollback-package" 2>/dev/null || true)
+  test -n "$package" && test -f "$package" || {
+    echo "no rollback package is available"
+    return 1
+  }
+  queue_resume "rollback to $package"
+  systemctl stop bb || true
+  npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$package"
+  start_and_check
+  echo "rolled back to $package"
+}
+
+if [[ "$mode" == rollback ]]; then
+  rollback_package
+  exit 0
+fi
+
+cd "$repo"
+test "$(id -u)" -eq 0 || { echo "bb deploy worker must run as root"; exit 1; }
+sudo -u exedev git diff --check
+sudo -u exedev env HOME=/home/exedev pnpm install --frozen-lockfile --prefer-offline
+sudo -u exedev env HOME=/home/exedev pnpm build
+
+version=$(sudo -u exedev node -p "require('$repo/packages/bb-app/package.json').version")
+commit=$(sudo -u exedev git rev-parse --short=12 HEAD)
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+chown exedev:exedev "$tmpdir"
+sudo -u exedev env HOME=/home/exedev npm pack --pack-destination "$tmpdir" "$repo/packages/bb-app"
+package=$(find "$tmpdir" -maxdepth 1 -name 'bb-app-*.tgz' -print -quit)
+test -n "$package"
+release="$releases/bb-app-${version}-${timestamp}-${commit}.tgz"
+install -o exedev -g exedev -m 0644 "$package" "$release"
+
+if [[ -f /home/exedev/.bb/bb.db ]]; then
+  sqlite3 /home/exedev/.bb/bb.db ".backup '$backups/bb-${timestamp}.db'"
+  chown exedev:exedev "$backups/bb-${timestamp}.db"
+fi
+
+rollback="$state/upstream-bb-app-${version}.tgz"
+if [[ ! -f "$rollback" ]]; then
+  registry_tmp=$(mktemp -d)
+  npm pack "bb-app@${version}" --pack-destination "$registry_tmp"
+  registry_package=$(find "$registry_tmp" -maxdepth 1 -name 'bb-app-*.tgz' -print -quit)
+  install -o root -g root -m 0644 "$registry_package" "$rollback"
+  rm -rf "$registry_tmp"
+fi
+printf '%s\n' "$rollback" > "$state/rollback-package"
+printf '%s\n' "$release" > "$state/current-package"
+
+queue_resume "deployment of commit $commit"
+systemctl stop bb
+if ! npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$release"; then
+  echo "custom package installation failed; restoring upstream"
+  npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$rollback"
+  start_and_check
+  exit 1
+fi
+
+if ! start_and_check; then
+  echo "custom bb failed its health check; restoring upstream"
+  systemctl stop bb || true
+  npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$rollback"
+  start_and_check
+  exit 1
+fi
+
+find "$releases" -maxdepth 1 -name 'bb-app-*.tgz' -printf '%T@ %p\n' | sort -rn | tail -n +6 | cut -d' ' -f2- | xargs -r rm -f
+find "$backups" -maxdepth 1 -name 'bb-*.db' -printf '%T@ %p\n' | sort -rn | tail -n +11 | cut -d' ' -f2- | xargs -r rm -f
+
+echo "deployed $release"

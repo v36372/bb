@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+case "${1:-deploy}" in
+  deploy)
+    mode=deploy
+    prefix=bb-deploy
+    ;;
+  rollback)
+    mode=rollback
+    prefix=bb-rollback
+    ;;
+  logs)
+    exec journalctl --no-pager -n 200 -u 'bb-deploy-*' -u 'bb-rollback-*'
+    ;;
+  *)
+    echo "usage: bb-deploy [deploy|rollback|logs]" >&2
+    exit 2
+    ;;
+esac
+
+unit="${prefix}-$(date -u +%Y%m%dT%H%M%SZ)"
+sudo systemd-run \
+  --unit="$unit" \
+  --collect \
+  --property=TimeoutStartSec=45min \
+  /usr/local/sbin/bb-deploy-worker "$mode" "${BB_THREAD_ID:-}" "$unit"
+echo "follow with: journalctl -f -u $unit"

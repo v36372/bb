@@ -13,6 +13,8 @@ Work in `/home/exedev/bb` and follow its `AGENTS.md`. `origin` is the writable f
 - Treat a dirty worktree as user work. Inspect it and stop before merging if it cannot be preserved safely. Never stash or discard it automatically.
 - Never modify `/usr/local/lib/node_modules/bb-app` directly or reset/delete `/home/exedev/.bb`.
 - Use `bb-deploy` for the live restart. It builds and packages the checkout, backs up the production SQLite database, restarts `bb.service`, health-checks port 8000, and automatically restores the upstream package if installation or health checks fail.
+- The tracked helper sources live in `scripts/exe-deploy/`. After changing them,
+  run `sudo scripts/exe-deploy/install`; never hand-edit the installed copies.
 
 ## Sync with upstream
 
@@ -91,9 +93,14 @@ The preview uses `/home/exedev/.bb-preview`, not production data. Inspect `bb-pr
 bb-deploy
 ```
 
-The command returns immediately and continues in a transient systemd unit because restarting bb disconnects the current agent. Capture the unit name and follow it to completion. A successful run ends with `deployed <release-path>`. No separate restart is needed.
+The command returns immediately and continues in a transient systemd unit. When
+`BB_THREAD_ID` is present, the worker queues a follow-up to that thread immediately
+before stopping BB. The restart interrupts the current turn, then the queued message
+automatically resumes the same workflow after BB is healthy. Do not start a
+`journalctl -f` supervised process from the active agent: it belongs to the old
+broker lifecycle and produces a misleading exit-143 notification on restart.
 
-After reconnection, verify the exact deployment:
+On the automatic continuation, verify the exact deployment:
 
 ```sh
 bb-deploy logs
@@ -101,7 +108,12 @@ bb status --json
 curl -fsS -o /dev/null http://127.0.0.1:8000/
 ```
 
-Confirm the deployed release filename contains the expected merged commit. On failure, inspect the full unit logs. The worker automatically restores the upstream package after installation or health-check failure; use `bb-deploy rollback` manually only when explicitly needed.
+Confirm the deployed release filename contains the expected commit, finish every
+remaining task, and report without waiting for the user to type `continue`. A manual
+shell with no `BB_THREAD_ID` gets no automatic follow-up; use the printed
+`journalctl -f -u <unit>` command there. On failure, inspect the full unit logs. The
+worker automatically restores the upstream package after installation or health-check
+failure; use `bb-deploy rollback` manually only when explicitly needed.
 
 ## Report
 
