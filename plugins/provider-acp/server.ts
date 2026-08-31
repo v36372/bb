@@ -17,6 +17,8 @@ const CUSTOM_AGENTS_SETTING_DESCRIPTION =
   "A JSON array of ACP agents to add. Each entry needs id, displayName and command; see the guide for the optional fields.";
 const CURSOR_ENABLED_SETTING_DESCRIPTION =
   "Show Cursor in the provider picker even when cursor-agent is not installed.";
+const OPENCODE_ENABLED_SETTING_DESCRIPTION =
+  "Show opencode when its CLI is detected on the host.";
 
 const PROBEABLE_ACP_AGENTS = KNOWN_ACP_AGENTS.filter(
   (agent) => (agent.fork ?? "none") !== "none",
@@ -45,6 +47,7 @@ export default async function acpProvidersPlugin(
 ): Promise<void> {
   const host = bb.hosts.experimental_client({ contract: acpHostContract });
   let cursorEnabled = true;
+  let opencodeEnabled = true;
   const settings = bb.settings.define({
     customAgents: {
       type: "string",
@@ -57,6 +60,12 @@ export default async function acpProvidersPlugin(
       type: "boolean",
       label: "Cursor provider",
       description: CURSOR_ENABLED_SETTING_DESCRIPTION,
+      default: true,
+    },
+    opencodeEnabled: {
+      type: "boolean",
+      label: "opencode provider",
+      description: OPENCODE_ENABLED_SETTING_DESCRIPTION,
       default: true,
     },
   });
@@ -72,7 +81,8 @@ export default async function acpProvidersPlugin(
       ...KNOWN_ACP_AGENTS.filter(
         (agent) =>
           !configuredIds.has(agent.id) &&
-          (cursorEnabled || agent.id !== "acp-cursor"),
+          (cursorEnabled || agent.id !== "acp-cursor") &&
+          (opencodeEnabled || agent.id !== "acp-opencode"),
       ).map((agent) => narrowed.get(agent.id) ?? agent),
       ...configuredAgents,
     ];
@@ -115,6 +125,7 @@ export default async function acpProvidersPlugin(
   async function resolveAndReconcile(
     settingValue: string,
     nextCursorEnabled: boolean,
+    nextOpencodeEnabled: boolean,
   ): Promise<void> {
     const legacy = await readLegacyCustomAcpAgents(
       bb.server.experimental_dataDir,
@@ -133,6 +144,7 @@ export default async function acpProvidersPlugin(
     }
     configuredAgents = resolved.agents;
     cursorEnabled = nextCursorEnabled;
+    opencodeEnabled = nextOpencodeEnabled;
     reconcile(desiredAgents());
     if (resolved.agents.length > 0) {
       bb.log.info(
@@ -145,10 +157,17 @@ export default async function acpProvidersPlugin(
   function queueReconcile(
     settingValue: string,
     nextCursorEnabled: boolean,
+    nextOpencodeEnabled: boolean,
   ): Promise<void> {
     pending = pending
       .catch(() => undefined)
-      .then(() => resolveAndReconcile(settingValue, nextCursorEnabled));
+      .then(() =>
+        resolveAndReconcile(
+          settingValue,
+          nextCursorEnabled,
+          nextOpencodeEnabled,
+        ),
+      );
     return pending;
   }
 
@@ -196,15 +215,21 @@ export default async function acpProvidersPlugin(
   }
 
   const initial = await settings.get();
-  await queueReconcile(initial.customAgents, initial.cursorEnabled);
+  await queueReconcile(
+    initial.customAgents,
+    initial.cursorEnabled,
+    initial.opencodeEnabled,
+  );
   settings.onChange((next) => {
-    void queueReconcile(next.customAgents, next.cursorEnabled).catch(
-      (error: unknown) => {
-        bb.log.error(
-          `Could not re-register the configured ACP agents: ${String(error)}`,
-        );
-      },
-    );
+    void queueReconcile(
+      next.customAgents,
+      next.cursorEnabled,
+      next.opencodeEnabled,
+    ).catch((error: unknown) => {
+      bb.log.error(
+        `Could not re-register the configured ACP agents: ${String(error)}`,
+      );
+    });
   });
 
   bb.background.service("acp-capability-probe", {

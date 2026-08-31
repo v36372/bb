@@ -52,6 +52,7 @@ function registeredIds(
 async function loadPlugin(options: {
   customAgents?: string;
   cursorEnabled?: boolean;
+  opencodeEnabled?: boolean;
   probe?: (command: string) => unknown;
   hosts?: { id: string; status: string }[];
 }) {
@@ -66,6 +67,9 @@ async function loadPlugin(options: {
       ...(options.cursorEnabled === undefined
         ? {}
         : { cursorEnabled: options.cursorEnabled }),
+      ...(options.opencodeEnabled === undefined
+        ? {}
+        : { opencodeEnabled: options.opencodeEnabled }),
     },
     ...(options.probe === undefined
       ? {}
@@ -97,15 +101,25 @@ describe("the ACP plugin's registrations", () => {
     expect(registeredIds(host)).toContain("acp-amp");
   });
 
-  it("removes Cursor when its setting is disabled", async () => {
-    const host = await loadPlugin({ cursorEnabled: false });
+  it("removes providers when their settings are disabled", async () => {
+    const host = await loadPlugin({
+      cursorEnabled: false,
+      opencodeEnabled: false,
+    });
 
     expect(registeredIds(host)).not.toContain("acp-cursor");
+    expect(registeredIds(host)).not.toContain("acp-opencode");
     expect(registeredIds(host)).toContain("acp-omp");
 
-    await host.harness.setSettings({ cursorEnabled: true });
+    await host.harness.setSettings({
+      cursorEnabled: true,
+      opencodeEnabled: true,
+    });
 
-    await vi.waitFor(() => expect(registeredIds(host)).toContain("acp-cursor"));
+    await vi.waitFor(() => {
+      expect(registeredIds(host)).toContain("acp-cursor");
+      expect(registeredIds(host)).toContain("acp-opencode");
+    });
   });
 
   it("replaces a shipped installed-only agent with a configured one", async () => {

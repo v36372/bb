@@ -138,6 +138,9 @@ environment pull-request show <id>`. Diff commands require an explicit target
   offer its installation flow. Hide only Cursor with
   `bb plugin config provider-acp set cursorEnabled false`; the change applies
   immediately.
+- Hide opencode regardless of host detection with
+  `bb plugin config provider-acp set opencodeEnabled false`; the change applies
+  immediately.
 - Cursor ACP threads discover project skills from `.cursor/skills`. This root
   can link to `.agents/skills`. `bb skill list` shows linked Cursor skills under
   `cursor-project` and keeps them read-only.

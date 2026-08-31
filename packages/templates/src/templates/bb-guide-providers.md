@@ -80,6 +80,8 @@ Cursor is listed by default even when cursor-agent is absent so bb can offer
 its installation flow. Hide only Cursor with
 `bb plugin config provider-acp set cursorEnabled false`; the change applies
 immediately.
+Hide opencode regardless of host detection with
+`bb plugin config provider-acp set opencodeEnabled false`.
 
 bb indexes the native user and project skill roots for Codex, Claude Code, Pi,
 Cursor, OpenCode, omp, Grok Build, and Hermes Agent. This includes compatibility

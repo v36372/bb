@@ -347,6 +347,12 @@ bb plugin config provider-acp set cursorEnabled false
 
 The change applies immediately. Set it back to `true` to restore Cursor.
 
+Likewise, hide opencode regardless of host detection with:
+
+```bash
+bb plugin config provider-acp set opencodeEnabled false
+```
+
 Add your own agent through the ACP providers plugin's `customAgents` setting,
 which holds a JSON array. In the app it is the multi-line editor on the
 plugin's settings page (Settings → Plugins → ACP providers); from the CLI:
