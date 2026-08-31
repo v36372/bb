@@ -192,9 +192,7 @@ describe("acpProviderDeclaration", () => {
   });
 
   it("declares the Cursor pstack cache as a recursive user root", () => {
-    const cursor = KNOWN_ACP_AGENTS.find(
-      (agent) => agent.id === "acp-cursor",
-    );
+    const cursor = KNOWN_ACP_AGENTS.find((agent) => agent.id === "acp-cursor");
     if (cursor === undefined) throw new Error("expected Cursor agent");
 
     expect(
