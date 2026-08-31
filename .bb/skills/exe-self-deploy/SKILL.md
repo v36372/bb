@@ -1,72 +1,108 @@
 ---
 name: exe-self-deploy
-description: Preview and deploy changes to the customized bb instance on this exe.dev VM. Use after modifying bb UI, server, daemon, plugins, or bundled assets in this repository.
+description: Update, preview, deploy, or restart the customized bb instance on this exe.dev VM. Use when syncing this bb fork with get-bb/bb upstream, resolving upstream merge conflicts, modifying bb UI/server/daemon/plugins/assets, testing a production-style preview, deploying live, rolling back, or restarting bb.
 ---
 
-# Preview and deploy this bb fork
+# Update and deploy this bb fork
 
-This checkout is the source for the customized bb installation on this VM.
+Work in `/home/exedev/bb` and follow its `AGENTS.md`. `origin` is the writable fork; `upstream` is `get-bb/bb`.
 
-## Remotes
+## Safety
 
-- `origin` is the writable fork.
-- `upstream` is `get-bb/bb`.
-- Integrate upstream with `git fetch upstream` and `git merge upstream/main` before pushing the fork. Never force-push `main`.
+- Preserve local customization. Merge upstream into published `main`; never rebase it, reset it, force-push it, or resolve an entire conflict with one side without inspecting both.
+- Treat a dirty worktree as user work. Inspect it and stop before merging if it cannot be preserved safely. Never stash or discard it automatically.
+- Never modify `/usr/local/lib/node_modules/bb-app` directly or reset/delete `/home/exedev/.bb`.
+- Use `bb-deploy` for the live restart. It builds and packages the checkout, backs up the production SQLite database, restarts `bb.service`, health-checks port 8000, and automatically restores the upstream package if installation or health checks fail.
+
+## Sync with upstream
+
+Establish a clean, current local branch:
+
+```sh
+cd /home/exedev/bb
+git status --short
+git branch --show-current
+git remote -v
+git fetch --prune origin
+git fetch --prune upstream
+git merge --ff-only origin/main
+git log --oneline --left-right main...upstream/main
+git diff --stat main...upstream/main
+```
+
+Require `main`, a clean worktree, `origin` as the writable fork, and `upstream` as `get-bb/bb`. If local and `origin/main` diverged, inspect the commits and reconcile them without resetting or force-pushing.
+
+Merge instead of rebasing published customization:
+
+```sh
+git merge --no-edit upstream/main
+```
+
+## Resolve conflicts
+
+If the merge conflicts:
+
+1. List every unresolved file with `git diff --name-only --diff-filter=U`.
+2. Read each complete conflict and surrounding construct. Inspect base/local/upstream versions where useful with `git show :1:<path>`, `git show :2:<path>`, and `git show :3:<path>`.
+3. Preserve customized behavior while adopting compatible upstream architecture, renamed APIs, migrations, tests, and documentation. Reuse the upstream convention instead of retaining obsolete parallel paths.
+4. Never blanket-resolve a whole file with `--ours` or `--theirs` unless inspection proves the other side contains no required change. Regenerate lockfiles and generated artifacts with their owning tools rather than hand-merging generated output.
+5. For server/daemon wire changes, preserve the required `HOST_DAEMON_PROTOCOL_VERSION` bump. For Drizzle conflicts, change schemas/migrations and regenerate snapshots; never hand-edit snapshot JSON.
+6. When upstream changed a contract, use language-server references and migrate every caller. When commands, flags, or settings changed, update the matching CLI guide, skill, and configuration docs required by `AGENTS.md`.
+7. Remove all conflict markers, stage only resolved files, run `git diff --check`, then complete the merge with `git commit --no-edit`.
+
+If semantics remain genuinely ambiguous after inspecting code, tests, history, and docs, ask the user about that specific choice. Resolve independent conflicts first.
+
+## Verify and push
+
+Identify affected packages from the merge diff. Run focused tests and typechecks through Turbo, as required by `AGENTS.md`:
+
+```sh
+pnpm exec turbo run test --filter=<affected-package>
+pnpm exec turbo run typecheck --filter=<affected-package>
+git diff --check
+git status --short
+git push origin main
+```
+
+Fix source failures; never suppress tests or warnings. Push the completed merge before touching the live service.
 
 ## Preview
 
-Build and restart the isolated preview:
+Build and restart the isolated production-style preview:
 
 ```sh
 bb-preview build
 ```
 
-Follow the unit printed by the command. The preview is available at:
+Capture the transient systemd unit printed by the command and follow it to completion with the available long-running-process facility. Success logs `preview ready at https://v36372-bb.exe.xyz:8001/`.
 
-```text
-https://v36372-bb.exe.xyz:8001/
-```
-
-It uses `/home/exedev/.bb-preview`, not production data. Other commands:
+Then verify:
 
 ```sh
 bb-preview status
-bb-preview logs
-bb-preview restart
-bb-preview stop
-bb-preview start
+curl -fsS -o /dev/null http://127.0.0.1:8001/
 ```
 
-## Production deployment
+The preview uses `/home/exedev/.bb-preview`, not production data. Inspect `bb-preview logs` on failure. Do not deploy a failed preview.
 
-Commit and push the intended source changes, then schedule deployment:
+## Deploy and restart production
 
 ```sh
-git diff --check
-git status --short
 bb-deploy
 ```
 
-`bb-deploy` installs dependencies, builds all production runtime artifacts, creates a package and database backup, installs the local package globally, restarts `bb.service`, and checks port 8000. The deployment runs in a separate transient systemd unit so it survives restarting bb itself.
+The command returns immediately and continues in a transient systemd unit because restarting bb disconnects the current agent. Capture the unit name and follow it to completion. A successful run ends with `deployed <release-path>`. No separate restart is needed.
 
-The production URL is:
-
-```text
-https://v36372-bb.exe.xyz/
-```
-
-Inspect deployments with:
+After reconnection, verify the exact deployment:
 
 ```sh
 bb-deploy logs
-systemctl status bb
-journalctl -u bb -n 200 --no-pager
+bb status --json
+curl -fsS -o /dev/null http://127.0.0.1:8000/
 ```
 
-Rollback to the matching upstream npm release with:
+Confirm the deployed release filename contains the expected merged commit. On failure, inspect the full unit logs. The worker automatically restores the upstream package after installation or health-check failure; use `bb-deploy rollback` manually only when explicitly needed.
 
-```sh
-bb-deploy rollback
-```
+## Report
 
-Production state remains under `/home/exedev/.bb`. Release packages and SQLite backups are retained under `/home/exedev/.local/state/bb`.
+Report the previous and merged upstream commit IDs, conflicts and chosen semantics, verification commands and results, pushed `origin/main` commit, deployed release path, and live health result.
