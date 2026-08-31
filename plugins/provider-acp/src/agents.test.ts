@@ -191,7 +191,7 @@ describe("acpProviderDeclaration", () => {
     });
   });
 
-  it("declares Cursor CLI managed skills as a user root", () => {
+  it("declares the Cursor plugin cache as a recursive user root", () => {
     const cursor = KNOWN_ACP_AGENTS.find(
       (agent) => agent.id === "acp-cursor",
     );
@@ -199,7 +199,7 @@ describe("acpProviderDeclaration", () => {
 
     expect(
       acpProviderDeclaration(cursor).experimental_nativeSkillRoots?.user,
-    ).toContainEqual({ path: ".cursor/skills-cursor", recursive: true });
+    ).toContainEqual({ path: ".cursor/plugins/cache", recursive: true });
   });
 
   it("declares no skill roots for an agent that names none", () => {
