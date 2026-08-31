@@ -240,6 +240,23 @@ describe("acpProviderDeclaration", () => {
     expect(byId.get("acp-opencode")?.experimental_bridgeOptions).toMatchObject({
       acpDialect: "opencode",
     });
+    expect(byId.get("acp-omp")?.experimental_bridgeOptions).toMatchObject({
+      acpLaunchSpec: {
+        command: "omp",
+        args: ["acp"],
+        modelCli: {
+          listArgs: ["models", "--json"],
+          selectFlag: "--model",
+          primaryModels: [],
+        },
+        reasoningCli: {
+          flag: "--thinking",
+          supportedLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+          levelValues: { none: "off" },
+          defaultLevel: "medium",
+        },
+      },
+    });
     expect(
       byId.get("acp-opencode")?.capabilities.supportsManualCompaction,
     ).toBe(true);

@@ -118,6 +118,17 @@ export const KNOWN_ACP_AGENTS: readonly AcpAgentDefinition[] = [
       command: "omp",
       args: ["acp"],
       env: {},
+      modelCli: {
+        listArgs: ["models", "--json"],
+        selectFlag: "--model",
+        primaryModels: [],
+      },
+      reasoningCli: {
+        flag: "--thinking",
+        supportedLevels: ["none", "low", "medium", "high", "xhigh", "max"],
+        levelValues: { none: "off" },
+        defaultLevel: "medium",
+      },
       nativeSkillRoots: {
         user: plainRoots([
           ".agent/skills",

@@ -1,5 +1,6 @@
 import { reasoningLevelValues } from "@bb/domain";
 import type { AvailableModel, ReasoningLevel, ServiceTier } from "@bb/domain";
+import { z } from "zod";
 import type { AcpConfigOption, AcpSessionModels } from "../wire.js";
 
 interface RawAgentModel {
@@ -30,6 +31,15 @@ interface AgentModelVariant extends RawAgentModel {
 const MODEL_LINE_PATTERN = /^(\S+) - (.+)$/;
 const BARE_PROVIDER_MODEL_LINE_PATTERN = /^\S+\/\S+$/;
 const BULLETED_MODEL_LINE_PATTERN = /^[*-]\s+(\S+)(?:\s+\([^)]*\))?$/u;
+const agentModelJsonSchema = z
+  .object({
+    selector: z.string().min(1),
+    name: z.string().min(1).optional(),
+  })
+  .passthrough();
+const agentModelListJsonSchema = z
+  .object({ models: z.array(agentModelJsonSchema) })
+  .passthrough();
 
 const EFFORT_TOKENS: ReadonlyArray<readonly [string, ReasoningLevel]> = [
   ["extra-high", "xhigh"],
@@ -54,6 +64,23 @@ export interface AgentModelCatalog {
 }
 
 export function parseAgentModelLines(stdout: string): RawAgentModel[] {
+  let parsedJson: unknown = null;
+  try {
+    parsedJson = JSON.parse(stdout);
+  } catch {
+    parsedJson = null;
+  }
+  const parsed = agentModelListJsonSchema.safeParse(parsedJson);
+  if (parsed.success) {
+    return [
+      { id: "acp-default", displayName: "Agent default" },
+      ...parsed.data.models.map((model) => ({
+        id: model.selector,
+        displayName: model.name ?? model.selector,
+      })),
+    ];
+  }
+
   const models: RawAgentModel[] = [];
   for (const line of stdout.split("\n")) {
     const trimmed = line.trim();

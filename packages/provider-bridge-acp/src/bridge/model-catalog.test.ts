@@ -27,6 +27,32 @@ describe("acp model catalog", () => {
     ]);
   });
 
+  it("parses JSON model catalogs and retains the agent-managed default", () => {
+    expect(
+      parseAgentModelLines(
+        JSON.stringify({
+          models: [
+            {
+              selector: "exe-dev-openai/gpt-5.6-sol@llm",
+              name: "openai/gpt-5.6-sol (llm)",
+              thinking: ["low", "medium", "high"],
+            },
+            {
+              selector: "anthropic/claude-opus",
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      { id: "acp-default", displayName: "Agent default" },
+      {
+        id: "exe-dev-openai/gpt-5.6-sol@llm",
+        displayName: "openai/gpt-5.6-sol (llm)",
+      },
+      { id: "anthropic/claude-opus", displayName: "anthropic/claude-opus" },
+    ]);
+  });
+
   it("parses bare model id lines", () => {
     expect(
       parseAgentModelLines(
