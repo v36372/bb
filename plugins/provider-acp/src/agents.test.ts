@@ -191,6 +191,17 @@ describe("acpProviderDeclaration", () => {
     });
   });
 
+  it("declares Cursor CLI managed skills as a user root", () => {
+    const cursor = KNOWN_ACP_AGENTS.find(
+      (agent) => agent.id === "acp-cursor",
+    );
+    if (cursor === undefined) throw new Error("expected Cursor agent");
+
+    expect(
+      acpProviderDeclaration(cursor).experimental_nativeSkillRoots?.user,
+    ).toContainEqual({ path: ".cursor/skills-cursor", recursive: true });
+  });
+
   it("declares no skill roots for an agent that names none", () => {
     for (const agent of KNOWN_ACP_AGENTS) {
       if (agent.launch.nativeSkillRoots !== undefined) continue;
