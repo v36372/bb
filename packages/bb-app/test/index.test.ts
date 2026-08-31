@@ -35,6 +35,7 @@ import {
   resolveBbAppCommand,
   resolveServerListenerUrl,
   resolveWorktreeRuntimePolicy,
+  requestManagedServerRestart,
   runBbApp,
   runBundledCliCommand,
   superviseFullStackProcesses,
@@ -1985,6 +1986,36 @@ describe("bb-app launcher", () => {
     expect(supervisor.serverRuns).toHaveLength(2);
     expect(nextServerRun).toBe(supervisor.serverRuns[1]);
     expect(supervisor.serverRuns[1]?.running).toBe(true);
+
+    await expect(stopFakeSupervisor(supervisor, supervision)).resolves.toBe(
+      "shutdown",
+    );
+  });
+
+  it("restarts only the server when a managed restart is requested", async () => {
+    const supervisor = createFakeSupervisor();
+    const initialServerRun = supervisor.serverRuns[0];
+    const initialDaemonRun = supervisor.daemonRuns[0];
+    const supervision = superviseFullStackProcesses({
+      context: createTestStartContext(),
+      delayMilliseconds: immediateDelay,
+      isShutdownRequested: supervisor.shutdownRequested,
+      processes: supervisor.processes,
+      startDaemon: supervisor.daemonStart,
+      startServer: supervisor.serverStart,
+    });
+
+    expect(requestManagedServerRestart(supervisor.processes)).toBe(true);
+    const nextServerRun = await waitForProcessReplacement({
+      currentRun: () => supervisor.processes.serverRun,
+      previousRun: initialServerRun,
+    });
+
+    expect(initialServerRun.terminationSignals).toEqual(["SIGTERM"]);
+    expect(initialDaemonRun.running).toBe(true);
+    expect(supervisor.processes.daemonRun).toBe(initialDaemonRun);
+    expect(supervisor.daemonRuns).toHaveLength(1);
+    expect(nextServerRun).toBe(supervisor.serverRuns[1]);
 
     await expect(stopFakeSupervisor(supervisor, supervision)).resolves.toBe(
       "shutdown",

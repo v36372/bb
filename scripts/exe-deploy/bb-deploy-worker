@@ -29,6 +29,32 @@ start_and_check() {
   health_check
 }
 
+server_launch_id() {
+  curl --fail --silent --max-time 1 http://127.0.0.1:8000/health 2>/dev/null |
+    jq -r '.launchId // empty' 2>/dev/null || true
+}
+
+graceful_server_restart() {
+  local old_launch_id main_pid next_launch_id
+  old_launch_id=$(server_launch_id)
+  main_pid=$(systemctl show bb.service --property=MainPID --value)
+  test -n "$main_pid" && test "$main_pid" != 0 || return 1
+  kill -HUP "$main_pid"
+  for _ in $(seq 1 90); do
+    next_launch_id=$(server_launch_id)
+    if [[ -n "$next_launch_id" && "$next_launch_id" != "$old_launch_id" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+full_restart_and_check() {
+  systemctl restart bb
+  health_check
+}
+
 queue_resume() {
   local detail=$1
   if [[ -z "$resume_thread_id" ]]; then
@@ -96,20 +122,33 @@ fi
 printf '%s\n' "$rollback" > "$state/rollback-package"
 printf '%s\n' "$release" > "$state/current-package"
 
-queue_resume "deployment of commit $commit"
-systemctl stop bb
+if [[ "$mode" == full ]]; then
+  queue_resume "full deployment of commit $commit"
+  systemctl stop bb
+fi
+
 if ! npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$release"; then
   echo "custom package installation failed; restoring upstream"
   npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$rollback"
-  start_and_check
+  if [[ "$mode" == full ]]; then
+    start_and_check
+  else
+    graceful_server_restart || full_restart_and_check
+  fi
   exit 1
 fi
 
-if ! start_and_check; then
-  echo "custom bb failed its health check; restoring upstream"
-  systemctl stop bb || true
+if [[ "$mode" == full ]]; then
+  if ! start_and_check; then
+    echo "custom bb failed its health check; restoring upstream"
+    npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$rollback"
+    start_and_check
+    exit 1
+  fi
+elif ! graceful_server_restart; then
+  echo "custom bb failed its graceful server restart; restoring upstream"
   npm install -g --allow-scripts=@parcel/watcher,better-sqlite3,node-pty "$rollback"
-  start_and_check
+  graceful_server_restart || full_restart_and_check
   exit 1
 fi
 

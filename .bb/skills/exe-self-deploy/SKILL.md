@@ -93,14 +93,19 @@ The preview uses `/home/exedev/.bb-preview`, not production data. Inspect `bb-pr
 bb-deploy
 ```
 
-The command returns immediately and continues in a transient systemd unit. When
-`BB_THREAD_ID` is present, the worker queues a follow-up to that thread immediately
-before stopping BB. The restart interrupts the current turn, then the queued message
-automatically resumes the same workflow after BB is healthy. Do not start a
-`journalctl -f` supervised process from the active agent: it belongs to the old
-broker lifecycle and produces a misleading exit-143 notification on restart.
+The default deployment installs the new package while the full-stack launcher and host
+daemon keep running, then sends `SIGHUP` to the launcher. The launcher terminates and
+restarts only its server child. Provider bridges and the active agent process stay
+alive, so the current turn continues through the brief server reconnect without a
+follow-up message.
 
-On the automatic continuation, verify the exact deployment:
+Use `bb-deploy full` only when the change must replace the launcher, host daemon,
+agent runtime, or provider-bridge process itself. A full deployment queues an automatic
+continuation before restarting the complete service. Do not start a `journalctl -f`
+supervised process: it belongs to the old broker lifecycle during a full restart and
+produces a misleading exit-143 notification.
+
+After either mode, verify the exact deployment:
 
 ```sh
 bb-deploy logs
@@ -109,11 +114,9 @@ curl -fsS -o /dev/null http://127.0.0.1:8000/
 ```
 
 Confirm the deployed release filename contains the expected commit, finish every
-remaining task, and report without waiting for the user to type `continue`. A manual
-shell with no `BB_THREAD_ID` gets no automatic follow-up; use the printed
-`journalctl -f -u <unit>` command there. On failure, inspect the full unit logs. The
-worker automatically restores the upstream package after installation or health-check
-failure; use `bb-deploy rollback` manually only when explicitly needed.
+remaining task, and report. On failure, inspect the full unit logs. The worker restores
+the upstream package after installation or health-check failure; use
+`bb-deploy rollback` manually only when explicitly needed.
 
 ## Report
 

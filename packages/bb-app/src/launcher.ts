@@ -3140,6 +3140,17 @@ export async function terminateManagedFullStackProcesses(
   await Promise.all(terminationPromises);
 }
 
+export function requestManagedServerRestart(
+  processes: ManagedFullStackProcesses,
+): boolean {
+  const serverRun = processes.serverRun;
+  if (serverRun === null) {
+    return false;
+  }
+  void serverRun.terminate("SIGTERM");
+  return true;
+}
+
 export async function superviseFullStackProcesses(
   args: SuperviseFullStackProcessesArgs,
 ): Promise<FullStackSupervisionResult> {
@@ -3456,6 +3467,10 @@ export async function runBbApp(
       void shutdown(signal);
     },
   );
+  const sighupHandler = (): void => {
+    requestManagedServerRestart(processes);
+  };
+  process.on("SIGHUP", sighupHandler);
 
   try {
     beginStep("Starting server");
@@ -3533,6 +3548,7 @@ export async function runBbApp(
     throw error;
   } finally {
     removeSignalForwarding();
+    process.off("SIGHUP", sighupHandler);
     if (runtimeRecordOwned) {
       await clearOwnBbAppRuntimeFile({
         dataDir: context.dataDir,

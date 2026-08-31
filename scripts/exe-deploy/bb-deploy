@@ -6,6 +6,10 @@ case "${1:-deploy}" in
     mode=deploy
     prefix=bb-deploy
     ;;
+  full)
+    mode=full
+    prefix=bb-deploy-full
+    ;;
   rollback)
     mode=rollback
     prefix=bb-rollback
@@ -14,7 +18,7 @@ case "${1:-deploy}" in
     exec journalctl --no-pager -n 200 -u 'bb-deploy-*' -u 'bb-rollback-*'
     ;;
   *)
-    echo "usage: bb-deploy [deploy|rollback|logs]" >&2
+    echo "usage: bb-deploy [deploy|full|rollback|logs]" >&2
     exit 2
     ;;
 esac
