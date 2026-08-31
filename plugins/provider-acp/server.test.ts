@@ -51,6 +51,7 @@ function registeredIds(
 
 async function loadPlugin(options: {
   customAgents?: string;
+  cursorEnabled?: boolean;
   probe?: (command: string) => unknown;
   hosts?: { id: string; status: string }[];
 }) {
@@ -58,9 +59,14 @@ async function loadPlugin(options: {
     pluginId: PLUGIN_ID,
     dataDir: NO_LEGACY_CONFIG,
     experimental_declaredIconNames: DECLARED_ICON_NAMES,
-    ...(options.customAgents === undefined
-      ? {}
-      : { settings: { customAgents: options.customAgents } }),
+    settings: {
+      ...(options.customAgents === undefined
+        ? {}
+        : { customAgents: options.customAgents }),
+      ...(options.cursorEnabled === undefined
+        ? {}
+        : { cursorEnabled: options.cursorEnabled }),
+    },
     ...(options.probe === undefined
       ? {}
       : {
@@ -89,6 +95,17 @@ describe("the ACP plugin's registrations", () => {
 
     expect(registeredIds(host)).toContain("acp-cursor");
     expect(registeredIds(host)).toContain("acp-amp");
+  });
+
+  it("removes Cursor when its setting is disabled", async () => {
+    const host = await loadPlugin({ cursorEnabled: false });
+
+    expect(registeredIds(host)).not.toContain("acp-cursor");
+    expect(registeredIds(host)).toContain("acp-omp");
+
+    await host.harness.setSettings({ cursorEnabled: true });
+
+    await vi.waitFor(() => expect(registeredIds(host)).toContain("acp-cursor"));
   });
 
   it("replaces a shipped installed-only agent with a configured one", async () => {

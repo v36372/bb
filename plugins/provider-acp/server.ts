@@ -15,6 +15,8 @@ import { readLegacyCustomAcpAgents } from "./src/legacy-config.js";
 
 const CUSTOM_AGENTS_SETTING_DESCRIPTION =
   "A JSON array of ACP agents to add. Each entry needs id, displayName and command; see the guide for the optional fields.";
+const CURSOR_ENABLED_SETTING_DESCRIPTION =
+  "Show Cursor in the provider picker even when cursor-agent is not installed.";
 
 const PROBEABLE_ACP_AGENTS = KNOWN_ACP_AGENTS.filter(
   (agent) => (agent.fork ?? "none") !== "none",
@@ -42,6 +44,7 @@ export default async function acpProvidersPlugin(
   bb: BbPluginApi,
 ): Promise<void> {
   const host = bb.hosts.experimental_client({ contract: acpHostContract });
+  let cursorEnabled = true;
   const settings = bb.settings.define({
     customAgents: {
       type: "string",
@@ -49,6 +52,12 @@ export default async function acpProvidersPlugin(
       description: CUSTOM_AGENTS_SETTING_DESCRIPTION,
       experimental_multiline: true,
       default: "",
+    },
+    cursorEnabled: {
+      type: "boolean",
+      label: "Cursor provider",
+      description: CURSOR_ENABLED_SETTING_DESCRIPTION,
+      default: true,
     },
   });
 
@@ -60,9 +69,11 @@ export default async function acpProvidersPlugin(
   function desiredAgents(): AcpAgentDefinition[] {
     const configuredIds = new Set(configuredAgents.map((agent) => agent.id));
     return [
-      ...KNOWN_ACP_AGENTS.filter((agent) => !configuredIds.has(agent.id)).map(
-        (agent) => narrowed.get(agent.id) ?? agent,
-      ),
+      ...KNOWN_ACP_AGENTS.filter(
+        (agent) =>
+          !configuredIds.has(agent.id) &&
+          (cursorEnabled || agent.id !== "acp-cursor"),
+      ).map((agent) => narrowed.get(agent.id) ?? agent),
       ...configuredAgents,
     ];
   }
@@ -101,7 +112,10 @@ export default async function acpProvidersPlugin(
     }
   }
 
-  async function resolveAndReconcile(settingValue: string): Promise<void> {
+  async function resolveAndReconcile(
+    settingValue: string,
+    nextCursorEnabled: boolean,
+  ): Promise<void> {
     const legacy = await readLegacyCustomAcpAgents(
       bb.server.experimental_dataDir,
     );
@@ -118,6 +132,7 @@ export default async function acpProvidersPlugin(
       bb.log.warn(warning);
     }
     configuredAgents = resolved.agents;
+    cursorEnabled = nextCursorEnabled;
     reconcile(desiredAgents());
     if (resolved.agents.length > 0) {
       bb.log.info(
@@ -127,10 +142,13 @@ export default async function acpProvidersPlugin(
   }
 
   let pending: Promise<void> = Promise.resolve();
-  function queueReconcile(settingValue: string): Promise<void> {
+  function queueReconcile(
+    settingValue: string,
+    nextCursorEnabled: boolean,
+  ): Promise<void> {
     pending = pending
       .catch(() => undefined)
-      .then(() => resolveAndReconcile(settingValue));
+      .then(() => resolveAndReconcile(settingValue, nextCursorEnabled));
     return pending;
   }
 
@@ -178,13 +196,15 @@ export default async function acpProvidersPlugin(
   }
 
   const initial = await settings.get();
-  await queueReconcile(initial.customAgents);
+  await queueReconcile(initial.customAgents, initial.cursorEnabled);
   settings.onChange((next) => {
-    void queueReconcile(next.customAgents).catch((error: unknown) => {
-      bb.log.error(
-        `Could not re-register the configured ACP agents: ${String(error)}`,
-      );
-    });
+    void queueReconcile(next.customAgents, next.cursorEnabled).catch(
+      (error: unknown) => {
+        bb.log.error(
+          `Could not re-register the configured ACP agents: ${String(error)}`,
+        );
+      },
+    );
   });
 
   bb.background.service("acp-capability-probe", {

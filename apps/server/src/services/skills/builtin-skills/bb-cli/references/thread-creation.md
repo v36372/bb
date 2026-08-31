@@ -134,6 +134,10 @@ environment pull-request show <id>`. Diff commands require an explicit target
   host; for example `opencode`, `omp`, Grok Build's `grok` CLI, or Hermes'
   `hermes` CLI on PATH appears as provider `acp-opencode`, `acp-omp`,
   `acp-grok`, or `acp-hermes-agent`.
+- Cursor is listed by default even when `cursor-agent` is absent so bb can
+  offer its installation flow. Hide only Cursor with
+  `bb plugin config provider-acp set cursorEnabled false`; the change applies
+  immediately.
 - Cursor ACP threads discover project skills from `.cursor/skills`. This root
   can link to `.agents/skills`. `bb skill list` shows linked Cursor skills under
   `cursor-project` and keeps them read-only.

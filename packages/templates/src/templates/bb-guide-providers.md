@@ -76,6 +76,11 @@ host. For example, opencode, omp, Grok Build's grok CLI, or Hermes' hermes CLI
 on PATH appears as provider acp-opencode, acp-omp, acp-grok, or
 acp-hermes-agent.
 
+Cursor is listed by default even when cursor-agent is absent so bb can offer
+its installation flow. Hide only Cursor with
+`bb plugin config provider-acp set cursorEnabled false`; the change applies
+immediately.
+
 bb indexes the native user and project skill roots for Codex, Claude Code, Pi,
 Cursor, OpenCode, omp, Grok Build, and Hermes Agent. This includes compatibility
 roots such as .agents/skills and .claude/skills when the provider supports them.
@@ -115,7 +120,7 @@ Custom ACP agents live in the ACP providers plugin's customAgents setting, a
 JSON array. Set it with bb plugin config provider-acp set customAgents '[...]'.
 Each entry needs id (lowercase letters, digits and dashes), displayName, and
 command. bb derives provider id acp-<id> from the slug id. The id is permanent.
-The id cursor is reserved because bb always lists that agent. The ids opencode,
+The id cursor is reserved because it names a shipped agent. The ids opencode,
 omp, grok and hermes-agent are not reserved, so an entry with one of those ids
 replaces the shipped agent. Use args, env, and cwd for the launch, modelCli
 for CLI model listing/selection, reasoningCli for launch-time reasoning flags,

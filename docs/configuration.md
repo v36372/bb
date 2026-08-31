@@ -337,8 +337,15 @@ Known ACP agents appear when their CLI is installed on the host. bb exposes
 `acp-opencode` when `opencode` is on PATH and can be launched as `opencode acp`,
 `acp-omp` when `omp` (oh-my-pi) is on PATH, `acp-grok` when Grok Build's `grok`
 CLI is on PATH and can be launched as `grok agent stdio`, and
-`acp-hermes-agent` when Hermes' `hermes` CLI is on PATH. `acp-cursor` is always
-listed.
+`acp-hermes-agent` when Hermes' `hermes` CLI is on PATH. `acp-cursor` is listed
+by default even when `cursor-agent` is not installed so bb can offer its
+installation flow. Hide it without affecting the other ACP providers:
+
+```bash
+bb plugin config provider-acp set cursorEnabled false
+```
+
+The change applies immediately. Set it back to `true` to restore Cursor.
 
 Add your own agent through the ACP providers plugin's `customAgents` setting,
 which holds a JSON array. In the app it is the multi-line editor on the
