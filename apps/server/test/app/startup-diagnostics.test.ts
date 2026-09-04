@@ -1,10 +1,13 @@
-import { once } from "node:events";
 import { readFile } from "node:fs/promises";
+import type { AddressInfo } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadServerConfig } from "@bb/config/server";
 import { describe, expect, it } from "vitest";
-import { startHttpListener } from "../../src/start-server.js";
+import {
+  awaitHttpListenerBound,
+  startHttpListener,
+} from "../../src/start-server.js";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 
@@ -14,6 +17,24 @@ async function readServerEntrypoint(): Promise<string> {
 
 async function readServerPackageJson(): Promise<string> {
   return readFile(resolve(testDir, "../../package.json"), "utf8");
+}
+
+async function readStartServerSource(): Promise<string> {
+  return readFile(resolve(testDir, "../../src/start-server.ts"), "utf8");
+}
+
+async function closeListener(
+  server: ReturnType<typeof startHttpListener>,
+): Promise<void> {
+  await new Promise<void>((resolveClose, rejectClose) => {
+    server.close((error) => {
+      if (error && error.message !== "Server is not running.") {
+        rejectClose(error);
+        return;
+      }
+      resolveClose();
+    });
+  });
 }
 
 describe("server startup diagnostics", () => {
@@ -63,23 +84,60 @@ describe("server startup diagnostics", () => {
     });
 
     try {
-      if (!server.listening) {
-        await once(server, "listening");
-      }
+      await awaitHttpListenerBound(server);
       expect(server.address()).toMatchObject({
         address: expectedAddress,
         family: "IPv4",
       });
     } finally {
-      await new Promise<void>((resolveClose, rejectClose) => {
-        server.close((error) => {
-          if (error) {
-            rejectClose(error);
-            return;
-          }
-          resolveClose();
-        });
+      await closeListener(server);
+    }
+  });
+
+  it("binds the HTTP listener before the startup recovery sweep", async () => {
+    const source = await readStartServerSource();
+    expect(source).toMatch(
+      /const server = startHttpListener\([\s\S]*await awaitHttpListenerBound\(server\);[\s\S]*await runStartupRecoverySweep\(/,
+    );
+  });
+
+  it("rejects a colliding listener before startup recovery can run", async () => {
+    const serverConfig = loadServerConfig({
+      env: {
+        BB_DATA_DIR: "/tmp/bb-server-listener-test",
+        BB_HOST_DAEMON_PORT: "49162",
+        BB_SERVER_BIND_HOST: "127.0.0.1",
+        BB_SERVER_PORT: "49161",
+        NODE_ENV: "development",
+      },
+    });
+    const holder = startHttpListener({
+      fetch: () => new Response("ok"),
+      serverConfig: { ...serverConfig, BB_SERVER_PORT: 0 },
+    });
+    let colliding: ReturnType<typeof startHttpListener> | undefined;
+    try {
+      await awaitHttpListenerBound(holder);
+      const address = holder.address();
+      expect(address).not.toBeNull();
+      const port = (address as AddressInfo).port;
+      colliding = startHttpListener({
+        fetch: () => new Response("ok"),
+        serverConfig: { ...serverConfig, BB_SERVER_PORT: port },
       });
+      let recovered = false;
+      await expect(
+        (async () => {
+          await awaitHttpListenerBound(colliding);
+          recovered = true;
+        })(),
+      ).rejects.toMatchObject({ code: "EADDRINUSE" });
+      expect(recovered).toBe(false);
+    } finally {
+      if (colliding) {
+        await closeListener(colliding);
+      }
+      await closeListener(holder);
     }
   });
 });

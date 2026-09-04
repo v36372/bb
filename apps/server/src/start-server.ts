@@ -47,6 +47,27 @@ export function startHttpListener(args: StartHttpListenerArgs) {
   });
 }
 
+export function awaitHttpListenerBound(
+  server: ReturnType<typeof serve>,
+): Promise<void> {
+  if (server.listening) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      server.close();
+      reject(error);
+    };
+    server.once("listening", onListening);
+    server.once("error", onError);
+  });
+}
+
 export async function runServer(serverConfig: ServerConfig): Promise<void> {
   const logger = createLogger({
     component: "server",
@@ -207,6 +228,13 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     telemetry,
     terminalSessions,
   };
+  const server = startHttpListener({
+    fetch: app.fetch,
+    serverConfig,
+  });
+  injectWebSocket(server);
+  await awaitHttpListenerBound(server);
+
   await runStartupRecoverySweep(sweepDeps).catch((error) => {
     logger.error({ err: error }, "Startup recovery sweep failed");
   });
@@ -217,12 +245,6 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
       "SECURITY WARNING: The public API is unauthenticated and permits command execution and file reads. Wildcard server binding must only be used behind a trusted network boundary.",
     );
   }
-
-  const server = startHttpListener({
-    fetch: app.fetch,
-    serverConfig,
-  });
-  injectWebSocket(server);
 
   logger.info(
     {
