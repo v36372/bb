@@ -24,7 +24,17 @@ health_check() {
   return 1
 }
 
+stop_stray_bb_app_live_units() {
+  local units unit
+  units=$(systemctl list-units --type=service --all --no-legend 'bb-app-live-*' | awk '{print $1}')
+  for unit in $units; do
+    [[ -n "$unit" ]] || continue
+    systemctl stop "$unit" || true
+  done
+}
+
 start_and_check() {
+  stop_stray_bb_app_live_units
   systemctl start bb
   health_check
 }
@@ -51,6 +61,7 @@ graceful_server_restart() {
 }
 
 full_restart_and_check() {
+  stop_stray_bb_app_live_units
   systemctl restart bb
   health_check
 }
