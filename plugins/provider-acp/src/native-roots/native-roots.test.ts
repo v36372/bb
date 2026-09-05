@@ -196,7 +196,7 @@ describe("omp", () => {
       }),
     );
     expect(byPath(roots, path.join(tempRoot, "base", "team"))).toMatchObject({
-      origin: "user",
+      origin: "project",
     });
   });
 

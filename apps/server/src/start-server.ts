@@ -225,6 +225,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
     aiServices,
     skillTreeRegistry,
     pluginSchedules: pluginService,
+    plugins: pluginService,
     telemetry,
     terminalSessions,
   };

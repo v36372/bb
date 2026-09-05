@@ -248,6 +248,10 @@ describe("acpProviderDeclaration", () => {
           "/home/exedev/.cursor/plugins/cache/cursor-public/pstack",
           "acp",
         ],
+        modelCli: {
+          listArgs: ["--list-models"],
+          primaryModels: [],
+        },
       },
     });
     expect(byId.get("acp-grok")?.experimental_bridgeOptions).toMatchObject({
